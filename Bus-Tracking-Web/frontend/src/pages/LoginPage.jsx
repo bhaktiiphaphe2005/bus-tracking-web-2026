@@ -52,7 +52,7 @@ export default function LoginPage({ onLogin, onGoSignup }) {
               className="auth-input" 
               value={role} 
               onChange={(e) => setRole(e.target.value)}
-              style={{ backgroundColor: '#fff' }}
+              style={{ backgroundColor: '#fff', color: '#000', cursor: 'pointer' }}
             >
               <option value="student">Student</option>
               <option value="driver">Driver</option>
@@ -60,11 +60,13 @@ export default function LoginPage({ onLogin, onGoSignup }) {
           </div>
 
           <div className="auth-field-group">
-            <label className="auth-label">EMAIL</label>
+            <label className="auth-label">
+              {role === "student" ? "EMAIL" : "DRIVER USERNAME"}
+            </label>
             <input
-              type="email"
+              type={role === "student" ? "email" : "text"}
               className="auth-input"
-              placeholder="student@college.edu"
+              placeholder={role === "student" ? "student@college.edu" : "e.g., driver101"}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required

@@ -72,10 +72,15 @@ export default function DriverMap({ driver, routeId, routeName, onLogout }) {
   const [position, setPosition] = useState(null); 
   const [speed, setSpeed] = useState(0);
   const [routeStops, setRouteStops] = useState([]);
+  const [roadPath, setRoadPath] = useState([]); // Track curved roads
   const [status, setStatus] = useState("idle"); 
   const [lastPosted, setLastPosted] = useState(null);
   const [errorMsg, setErrorMsg] = useState("");
   const [accuracy, setAccuracy] = useState(null);
+  
+  // Track dynamic route info
+  const [activeRouteId, setActiveRouteId] = useState(routeId || "ROUTE_A");
+  const [activeRouteName, setActiveRouteName] = useState(routeName || "Route A");
 
   const prevPosRef = useRef(null);
   const intervalRef = useRef(null);
@@ -84,13 +89,42 @@ export default function DriverMap({ driver, routeId, routeName, onLogout }) {
   // Fallback to BUS-101 if driver data is missing during testing
   const busId = driver?.assignedBusId || "BUS-101";
 
-  // ── Fetch route stops (Matches @GetMapping("/{busId}/route")) ──
+  // ── Fetch route stops and Active Bus metadata ──
   useEffect(() => {
     if (!busId) return;
+    
+    // Fetch stops AND exact true driving road shapes
     fetch(`${API_BASE}/${busId}/route`)
       .then((r) => r.json())
-      .then((stops) => setRouteStops(stops))
+      .then(async (stops) => {
+         setRouteStops(stops);
+         if(stops && stops.length > 0) {
+           try {
+             const coords = stops.map(s => `${s.lng},${s.lat}`).join(';');
+             const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`);
+             const data = await res.json();
+             const path = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+             setRoadPath(path);
+           } catch(e) {
+             console.error("OSRM Driver tracking fallback");
+             setRoadPath(stops.map(s => [s.lat, s.lng]));
+           }
+         }
+      })
       .catch(() => setRouteStops([]));
+
+    // Fetch existing bus metadata to prevent accidental overwrites
+    fetch(`${API_BASE}/all`)
+      .then(r => r.json())
+      .then(buses => {
+        const myBus = buses.find(b => b.busId === busId);
+        if(myBus) {
+           setActiveRouteId(myBus.routeId);
+           setActiveRouteName(myBus.routeName);
+        }
+      })
+      .catch(console.error);
+
   }, [busId]);
 
   // ── Post location (Matches @PostMapping("/location")) ──
@@ -98,8 +132,8 @@ export default function DriverMap({ driver, routeId, routeName, onLogout }) {
     (lat, lng, spd) => {
       const payload = {
         busId,
-        routeId: routeId || "R-01",
-        routeName: routeName || "Main Route",
+        routeId: activeRouteId,
+        routeName: activeRouteName,
         lat,
         lng,
         speedKmh: Math.round(spd * 10) / 10,
@@ -126,7 +160,7 @@ export default function DriverMap({ driver, routeId, routeName, onLogout }) {
         setErrorMsg("Network Error: Backend offline");
       });
     },
-    [busId, routeId, routeName]
+    [busId, activeRouteId, activeRouteName]
   );
 
   // ── Tracking Logic ──
@@ -204,8 +238,8 @@ export default function DriverMap({ driver, routeId, routeName, onLogout }) {
 />
           {position && <RecenterMap position={[position.lat, position.lng]} />}
           
-          {routePolyline.length > 1 && (
-            <Polyline positions={routePolyline} pathOptions={{ color: "#F59E0B", weight: 3, dashArray: "6 4" }} />
+          {roadPath.length > 1 && (
+            <Polyline positions={roadPath} pathOptions={{ color: "#F59E0B", weight: 6, opacity: 0.8 }} />
           )}
 
           {routeStops.map((stop, i) => (
