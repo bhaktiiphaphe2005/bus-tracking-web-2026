@@ -127,6 +127,17 @@ export default function StudentMap() {
     }
   };
 
+  // NEW: Automatically update ETAs in real-time when the Bus moves!
+  useEffect(() => {
+    if (sidebarOpen && activeSidebarBus) {
+      const liveBus = buses.find(b => b.busId === activeSidebarBus.busId);
+      if (liveBus && (liveBus.lat !== activeSidebarBus.lat || liveBus.lng !== activeSidebarBus.lng)) {
+        // Driver moved! Recalculate ETA quietly in background
+        fetchLiveETAs(liveBus);
+      }
+    }
+  }, [buses]);
+
   if (loading) return <div style={styles.loader}>Initializing Multi-Bus Maps...</div>;
 
   return (
